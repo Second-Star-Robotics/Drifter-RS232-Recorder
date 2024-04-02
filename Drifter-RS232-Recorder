@@ -1,0 +1,58 @@
+import serial
+from datetime import datetime
+import os
+import time
+
+# Assuming RPi.GPIO for demonstration, replace with your specific GPIO library
+import RPi.GPIO as GPIO
+
+# GPIO setup
+PD19 = 19  # Replace with the actual GPIO pin number for PD19
+PB11 = 11  # Replace with the actual GPIO pin number for PB11
+GPIO.setmode(GPIO.BCM)  # Use Broadcom pin-numbering scheme
+GPIO.setup(PD19, GPIO.IN)  # PD19 as input
+GPIO.setup(PB11, GPIO.OUT, initial=GPIO.LOW)  # PB11 as output, initially Low
+
+# Serial port configuration
+SERIAL_PORT = '/dev/ttyS1'
+BAUD_RATE = 9600
+
+# Generate a filename with the current date and time
+timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+filename = f"serial_data_{timestamp}.txt"
+
+file_open = False
+
+# Open the serial port
+with serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1) as ser:
+    while True:
+        # Check PD19 state
+        if GPIO.input(PD19):
+            if not file_open:
+                # Open the file for writing if PD19 is high and file is not already open
+                file = open(filename, 'w')
+                file_open = True
+
+            # Read a line from the serial port
+            line = ser.readline()
+
+            if line:
+                # Decode bytes to string and write to file
+                decoded_line = line.decode('utf-8')
+                file.write(decoded_line)
+                file.flush()
+                os.fsync(file.fileno())
+        else:
+            if file_open:
+                # Close the file if PD19 is low and the file is open
+                file.close()
+                file_open = False
+                
+                # Set PB11 high to indicate readiness to shutdown
+                GPIO.output(PB11, GPIO.HIGH)
+                break  # Exit the loop if needed or continue based on your requirement
+
+        time.sleep(0.1)  # Small delay to reduce CPU usage
+
+# Cleanup GPIO before exiting (if the script is meant to exit)
+GPIO.cleanup()
